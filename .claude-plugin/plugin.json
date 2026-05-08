@@ -1,0 +1,16 @@
+{
+  "name": "domain-glossary",
+  "version": "0.1.0",
+  "description": "Builds source-grounded domain glossaries from code symbols, session memory, commits, and Obsidian notes, with drift checks for every citation.",
+  "author": {
+    "name": "nhangen"
+  },
+  "license": "MIT",
+  "keywords": [
+    "glossary",
+    "obsidian",
+    "gitnexus",
+    "claude-mem",
+    "domain-context"
+  ]
+}
