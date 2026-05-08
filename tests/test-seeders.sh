@@ -79,4 +79,17 @@ SYMBOL_OUTPUT="$(
 grep -q 'smooth_phase_boundaries' <<<"$SYMBOL_OUTPUT"
 grep -q '`smooth_phase_boundaries` in `example-repo:src/bridge.py`' <<<"$SYMBOL_OUTPUT"
 
+mkdir -p "$TMP/not-a-repo"
+cat >"$TMP/not-a-repo/module.py" <<'PY'
+def fake_symbol():
+    return "not a repository"
+PY
+
+if "$ROOT/skills/domain-glossary/scripts/seed-from-gitnexus.sh" \
+  --repo "$TMP/not-a-repo" \
+  --repo-name not-a-repo >/dev/null 2>&1; then
+  echo "seed-from-gitnexus accepted a non-repository directory" >&2
+  exit 1
+fi
+
 echo "seeder fixtures passed"

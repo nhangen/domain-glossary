@@ -63,13 +63,14 @@ if [[ -z "$REPO_NAME" ]]; then
   REPO_NAME="$(basename "$REPO")"
 fi
 
+if ! git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Not a git repository: $REPO" >&2
+  exit 2
+fi
+
 if command -v gitnexus >/dev/null 2>&1; then
   if ! gitnexus -h >/dev/null 2>&1; then
     echo "gitnexus CLI is installed but not responding cleanly" >&2
-  fi
-  if ! git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "Not a git repository: $REPO" >&2
-    exit 2
   fi
 else
   echo "gitnexus CLI not found; using local symbol fallback" >&2

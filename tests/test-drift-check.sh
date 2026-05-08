@@ -18,11 +18,15 @@ def smooth_phase_boundaries():
 PY
 
 cat >"$REPO/src/moved.py" <<'PY'
+LOCAL_ONLY = "module"
+
+
 def relocated_symbol():
     return "moved"
 
 
 def comment_only_symbol():
+    local_assignment = "not stable"
     return "definition"
 PY
 
@@ -32,6 +36,9 @@ MD
 cat >"$TMP/outside.md" <<'MD'
 # Outside Vault
 MD
+cat >"$TMP/outside.py" <<'PY'
+# Outside repo
+PY
 
 cat >"$TMP/glossary.md" <<'MD'
 ### Smooth phase boundaries
@@ -54,6 +61,14 @@ Definition.
 
 **Domain:** Altamira
 **Citation:** `example-repo:src/bridge.py:1`
+**Last verified:** 2026-05-08
+
+Definition.
+
+### Escaping path
+
+**Domain:** Altamira
+**Citation:** `example-repo:../outside.py:1`
 **Last verified:** 2026-05-08
 
 Definition.
@@ -82,6 +97,14 @@ Definition.
 
 Definition.
 
+### Local assignment
+
+**Domain:** Altamira
+**Citation:** `local_assignment` in `example-repo:src/moved.py`
+**Last verified:** 2026-05-08
+
+Definition.
+
 ### Missing symbol
 
 **Domain:** Altamira
@@ -101,9 +124,11 @@ OUTPUT="$(
 grep -q "RESOLVED.*Smooth phase boundaries.*symbol" <<<"$OUTPUT"
 grep -q "RESOLVED.*Source note.*note" <<<"$OUTPUT"
 grep -q "RESOLVED.*Path citation.*path" <<<"$OUTPUT"
+grep -q "UNRESOLVED.*Escaping path.*path escapes repo" <<<"$OUTPUT"
 grep -q "RELOCATED.*Relocated symbol.*relocated_symbol" <<<"$OUTPUT"
 grep -q "RELOCATED.*Comment-only old hit.*comment_only_symbol" <<<"$OUTPUT"
 grep -q "UNRESOLVED.*Traversal note.*note escapes vault" <<<"$OUTPUT"
+grep -q "UNRESOLVED.*Local assignment.*local_assignment" <<<"$OUTPUT"
 grep -q "UNRESOLVED.*Missing symbol.*missing_symbol" <<<"$OUTPUT"
 
 JSON_OUTPUT="$(
@@ -114,8 +139,34 @@ JSON_OUTPUT="$(
     "$TMP/glossary.md"
 )"
 
-grep -q '"status":"RESOLVED"' <<<"$JSON_OUTPUT"
-grep -q '"status":"RELOCATED"' <<<"$JSON_OUTPUT"
-grep -q '"status":"UNRESOLVED"' <<<"$JSON_OUTPUT"
+python3 - <<'PY' <<<"$JSON_OUTPUT"
+import json
+import sys
+
+rows = [json.loads(line) for line in sys.stdin if line.strip()]
+by_term = {row["term"]: row for row in rows}
+
+assert by_term["Smooth phase boundaries"]["status"] == "RESOLVED"
+assert by_term["Smooth phase boundaries"]["kind"] == "symbol"
+
+relocated = by_term["Comment-only old hit"]
+assert relocated["status"] == "RELOCATED"
+assert relocated["kind"] == "symbol"
+assert relocated["suggestion"] == "`comment_only_symbol` in `example-repo:src/moved.py`"
+
+escaping = by_term["Escaping path"]
+assert escaping["status"] == "UNRESOLVED"
+assert escaping["kind"] == "path"
+assert "path escapes repo" in escaping["detail"]
+
+local_assignment = by_term["Local assignment"]
+assert local_assignment["status"] == "UNRESOLVED"
+assert local_assignment["kind"] == "symbol"
+
+traversal = by_term["Traversal note"]
+assert traversal["status"] == "UNRESOLVED"
+assert traversal["kind"] == "note"
+assert "note escapes vault" in traversal["detail"]
+PY
 
 echo "drift-check fixtures passed"

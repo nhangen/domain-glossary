@@ -126,7 +126,7 @@ resolve_path_parts() {
   local repo="${spec%%:*}"
   local rest="${spec#*:}"
   local line=""
-  local root
+  local root joined real_root real_file
 
   if [[ "$spec" == /* ]]; then
     printf '%s\t%s\t%s\n' "" "$spec" ""
@@ -147,7 +147,19 @@ resolve_path_parts() {
     return 1
   fi
 
-  printf '%s\t%s\t%s\n' "$repo" "$root/$rest" "$line"
+  joined="$root/$rest"
+  real_root="$(cd "$root" && pwd -P)"
+  if [[ -e "$joined" ]]; then
+    real_file="$(cd "$(dirname "$joined")" && pwd -P)/$(basename "$joined")"
+    if [[ "$real_file" != "$real_root"/* ]]; then
+      return 2
+    fi
+  elif [[ "$rest" == /* || "$rest" == ".." || "$rest" == ../* ||
+        "$rest" == */../* || "$rest" == */.. ]]; then
+    return 2
+  fi
+
+  printf '%s\t%s\t%s\n' "$repo" "$joined" "$line"
 }
 
 symbol_defined_in_file() {
@@ -167,7 +179,7 @@ symbol_defined_in_file() {
         name = $0
         sub(/^[[:space:]]*(def|class)[[:space:]]+/, "", name)
         name = trim_name(name)
-      } else if ($0 ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/) {
+      } else if ($0 ~ /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/) {
         name = $0
         name = trim_name(name)
       }
@@ -186,7 +198,7 @@ search_symbol() {
 
   (
     cd "$root"
-    rg -l '^[[:space:]]*(def|class)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*|^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=' . \
+    rg -l '^[[:space:]]*(def|class)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*|^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=' . \
       -g '!**/.git/**' \
       -g '!**/.venv/**' \
       -g '!**/node_modules/**' \
@@ -240,10 +252,22 @@ check_path() {
   local parts repo file line
 
   spec="$(strip_backticks "$citation")"
-  if ! parts="$(resolve_path_parts "$spec")"; then
-    emit "UNRESOLVED" "$term" "path" "$citation" "unknown repo in $spec"
-    return
-  fi
+  local resolve_status
+  set +e
+  parts="$(resolve_path_parts "$spec")"
+  resolve_status=$?
+  set -e
+  case "$resolve_status" in
+    0) ;;
+    2)
+      emit "UNRESOLVED" "$term" "path" "$citation" "path escapes repo: $spec"
+      return
+      ;;
+    *)
+      emit "UNRESOLVED" "$term" "path" "$citation" "unknown repo in $spec"
+      return
+      ;;
+  esac
 
   IFS=$'\t' read -r repo file line <<<"$parts"
   if [[ -f "$file" ]]; then
