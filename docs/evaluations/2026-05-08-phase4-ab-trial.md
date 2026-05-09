@@ -21,8 +21,8 @@ prompt for each fixture.
 run, so the planned token measurement could not be produced. The trial records
 self-reported retrospective proxy measurements instead:
 
-- first-correct-hypothesis step, where a step is the subagent's own numbered
-  reasoning step before it named the root cause;
+- first-correct-hypothesis step, where the step is the numbered reasoning
+  step at which the subagent named the root cause;
 - whether the final PR description preserved domain vocabulary;
 - whether the session needed extra context to name the root cause;
 - reviewer judgment on whether the result would need editing before reuse.
@@ -37,11 +37,11 @@ glossary helps on a fresh investigation.
 ## Results
 
 | Fixture | Session | Glossary context | First correct hypothesis | Domain-language PR description | Notes |
-| --- | --- | --- | ---: | --- | --- |
-| MR !29 kinematics-anchor mismatch | A | no | 3 | partial | Found the root cause, but described it in looser implementation terms. |
-| MR !29 kinematics-anchor mismatch | B | yes | 3 | strong | Used "smooth phase boundaries" and "kinematics anchor" directly and described the production-vs-harness mismatch more cleanly. |
-| MTF-35 DTW threshold-artifact guard | A | no | 3 | partial | Found the stale guard and proposed the correct allowlist-style fix. |
-| MTF-35 DTW threshold-artifact guard | B | yes | 3 | strong | Preserved the calibrated trust semantics and fallback vocabulary in the PR description. |
+| --- | --- | --- | --- | --- | --- |
+| MR !29 kinematics-anchor mismatch | A | no | 3 (saturated — see caveat) | partial | Found the root cause, but described it in looser implementation terms. |
+| MR !29 kinematics-anchor mismatch | B | yes | 3 (saturated — see caveat) | strong | Used "smooth phase boundaries" and "kinematics anchor" directly and described the production-vs-harness mismatch more cleanly. |
+| MTF-35 DTW threshold-artifact guard | A | no | 3 (saturated — see caveat) | partial | Found the stale guard and proposed the correct allowlist-style fix. |
+| MTF-35 DTW threshold-artifact guard | B | yes | 3 (saturated — see caveat) | strong | Preserved the calibrated trust semantics and fallback vocabulary in the PR description. |
 
 ## Decision
 
