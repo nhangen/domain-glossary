@@ -8,6 +8,9 @@ Sources:
 - Git commit messages for repeated nouns and noun phrases.
 - GitNexus-indexed repos when available, with local symbol definitions as the
   scriptable fallback.
+- In-repo documentation (README.md, AGENTS.md, CLAUDE.md, CONTEXT.md, `docs/**`,
+  module READMEs, and Python module/class docstrings) for the vocabulary the
+  project has already written down.
 - Obsidian notes for durable domain vocabulary already written down.
 
 The user confirms candidates before the skill writes glossary entries.
@@ -25,6 +28,8 @@ The evidence column is source-specific:
 - `claude-mem`: comma-separated observation IDs.
 - `commits`: first matching commit subject.
 - `gitnexus-fallback`: a proposed symbol citation.
+- `docs`: a `<repo>:<relative/path>` pointer to the doc file the candidate came
+  from (no line number — files move, line numbers don't survive doc edits).
 
 ## Merge Logic
 

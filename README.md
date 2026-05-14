@@ -10,7 +10,7 @@ This plugin keeps glossary entries in Obsidian (per-domain, not per-repo), requi
 
 ## How it works
 
-1. **Seed** candidate terms from three sources: claude-mem observations, git commit message corpora, and local symbol definitions (GitNexus CLI when available, grep fallback otherwise).
+1. **Seed** candidate terms from four sources: claude-mem observations, git commit message corpora, local symbol definitions (GitNexus CLI when available, grep fallback otherwise), and in-repo documentation (READMEs, `docs/**`, Python docstrings).
 2. **Confirm** each candidate with the user before writing — the agent never writes uncited entries.
 3. **Store** accepted entries in an Obsidian domain glossary (`<vault>/<Domain>/glossary.md`).
 4. **Drift-check** on demand: walk every citation, resolve it against the cited repo, report status.
@@ -48,6 +48,7 @@ All scripts live under `skills/domain-glossary/scripts/` and can be run directly
 | `seed-from-claude-mem.sh --project <p> --query <q>` | Candidate terms from claude-mem SQLite (`~/.claude-mem/claude-mem.db`). |
 | `seed-from-commits.sh --repo <path> [--since <date>]` | Candidate terms by phrase frequency in git log. |
 | `seed-from-gitnexus.sh --repo <path> --repo-name <alias>` | Candidate terms from symbol definitions (GitNexus when present, grep fallback). |
+| `seed-from-docs.sh --repo <path> --repo-name <alias>` | Candidate terms from READMEs, `docs/**`, module READMEs, and Python module/class docstrings. |
 | `render-repo-mirror.sh --source <vault.md> --dest <repo/docs/glossary.md>` | Copy vault glossary to a repo mirror with provenance header. |
 
 ## Citation forms
@@ -78,6 +79,7 @@ Seed candidates for a domain glossary:
 skills/domain-glossary/scripts/seed-from-claude-mem.sh --project mtf-builder --query Altamira
 skills/domain-glossary/scripts/seed-from-commits.sh    --repo /path/to/mtf-builder
 skills/domain-glossary/scripts/seed-from-gitnexus.sh   --repo /path/to/mtf-builder --repo-name mtf-builder
+skills/domain-glossary/scripts/seed-from-docs.sh       --repo /path/to/mtf-builder --repo-name mtf-builder
 ```
 
 Each seed script emits tab-separated rows (`candidate<TAB>count<TAB>source<TAB>citation`). The agent merges and ranks them per `references/seed-protocol.md`.
@@ -107,6 +109,7 @@ Then restart Claude Code. The `/domain-glossary` command and skill become availa
 ```bash
 ./tests/test-drift-check.sh
 ./tests/test-seeders.sh
+./tests/test-seed-from-docs.sh
 ./tests/test-render-repo-mirror.sh
 ```
 
