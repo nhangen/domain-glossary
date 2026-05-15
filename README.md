@@ -10,11 +10,12 @@ This plugin keeps glossary entries in Obsidian (per-domain, not per-repo), requi
 
 ## How it works
 
-1. **Seed** candidate terms from four sources: claude-mem observations, git commit message corpora, local symbol definitions (GitNexus CLI when available, grep fallback otherwise), and in-repo documentation (READMEs, `docs/**`, Python docstrings).
-2. **Confirm** each candidate with the user before writing — the agent never writes uncited entries.
-3. **Store** accepted entries in an Obsidian domain glossary (`<vault>/<Domain>/glossary.md`).
-4. **Drift-check** on demand: walk every citation, resolve it against the cited repo, report status.
-5. **Mirror** (optional) the canonical vault file to a repo `docs/glossary.md` with a provenance header.
+1. **Look up on demand.** When the agent encounters an unfamiliar acronym or project-specific term in a registered repo, it auto-invokes the skill, resolves the cwd to a domain via `domain-glossary.local.md`, reads that domain's glossary file, and answers grounded — no manual `@-includes`, no CLAUDE.md edits.
+2. **Seed** candidate terms from four sources: claude-mem observations, git commit message corpora, local symbol definitions (GitNexus CLI when available, grep fallback otherwise), and in-repo documentation (READMEs, `docs/**`, Python docstrings).
+3. **Confirm** each candidate with the user before writing — the agent never writes uncited entries.
+4. **Store** accepted entries in an Obsidian domain glossary (`<vault>/<Domain>/glossary.md`).
+5. **Drift-check** on demand: walk every citation, resolve it against the cited repo, report status.
+6. **Mirror** (optional) the canonical vault file to a repo `docs/glossary.md` with a provenance header.
 
 ## Current Status
 
@@ -34,8 +35,9 @@ Because `token-scope` was not available in the trial shell, this repository does
 
 | Command | What it does |
 |---|---|
+| *(no command — auto-invoke)* | When the agent meets a term it can't ground, it invokes the skill, resolves the active repo's domain, and reads the matching glossary before answering. |
 | `/domain-glossary` | Identify the current domain and list available subcommands. |
-| `/domain-glossary seed <domain>` | Run the three seed scripts and merge candidates for review. |
+| `/domain-glossary seed <domain>` | Run the four seed scripts and merge candidates for review. |
 | `/domain-glossary drift-check <glossary.md>` | Resolve every citation in the glossary and report drift. |
 
 ## Scripts
@@ -92,12 +94,40 @@ Personal plugin (source-tree development model):
 # Source lives in ~/ML-AI/claude/domain-glossary
 # Symlink into the Claude Code plugin cache to use it live:
 ln -s ~/ML-AI/claude/domain-glossary \
-      ~/.claude/plugins/cache/nhangen/domain-glossary/0.1.0
+      ~/.claude/plugins/cache/nhangen/domain-glossary/0.2.0
 ```
 
 Then restart Claude Code. The `/domain-glossary` command and skill become available.
 
 ## Configuration
+
+### Domain → repo mapping (one-time, per machine)
+
+Copy the example config and register your domains:
+
+```bash
+cp ~/ML-AI/claude/domain-glossary/domain-glossary.local.md.example \
+   ~/ML-AI/claude/domain-glossary/domain-glossary.local.md
+# edit domain-glossary.local.md
+```
+
+```yaml
+---
+domains:
+  - name: Altamira
+    glossary: ~/Documents/Obsidian/Altamira/glossary.md
+    repos:
+      - /absolute/path/to/mtf-builder
+  - name: OptinMonster
+    glossary: ~/Documents/Obsidian/Awesome Motive/glossary.md
+    repos:
+      - /absolute/path/to/wp-content
+---
+```
+
+`*.local.md` is gitignored. Adding a new domain is one entry in this file; no per-repo install, no CLAUDE.md edits. Worktree siblings (e.g. `mtf-builder-feature-x`) are caught by longest-prefix match.
+
+### Env vars
 
 | Env var | Default | Purpose |
 |---|---|---|

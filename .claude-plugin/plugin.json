@@ -1,7 +1,7 @@
 {
   "name": "domain-glossary",
-  "version": "0.1.0",
-  "description": "Builds source-grounded domain glossaries from code symbols, session memory, commits, and Obsidian notes, with drift checks for every citation.",
+  "version": "0.2.0",
+  "description": "Source-grounded project glossary: auto-invokes on unfamiliar terms in registered repos, plus build (seed) and maintain (drift-check) operations.",
   "author": {
     "name": "nhangen"
   },

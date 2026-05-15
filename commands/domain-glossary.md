@@ -10,8 +10,15 @@ User arguments: `$ARGUMENTS`
 Pass the full user arguments through to the skill. Interpret the first argument
 as the requested subcommand when present:
 
+- `lookup <term>` (default if first arg looks like a term, not a subcommand)
 - `seed`
 - `drift-check`
+
+For `lookup`, the skill auto-resolves the active repo's domain via
+`${CLAUDE_PLUGIN_ROOT}/domain-glossary.local.md` and reads the matching
+glossary file. This is also the operation the skill performs when invoked
+without a slash-command — whenever the agent encounters an unfamiliar term in
+a registered repo.
 
 For drift checks, run:
 
