@@ -7,8 +7,9 @@ author: nhangen
 
 # domain-glossary
 
-Status: Phase 1 drift-check and Phase 2 seed scripts are available. The first
-Altamira glossary seed exists in Obsidian.
+Status: Phase 1 drift-check and Phase 2 seed scripts are available (four
+sources: claude-mem, commits, gitnexus symbols, docs). The first Altamira
+glossary seed exists in Obsidian.
 
 ## Current Behavior
 
@@ -24,13 +25,14 @@ ${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/drift-check.sh <glossary.md
 Add `--repo name=/absolute/path` when a glossary uses repo aliases that are not
 registered in GitNexus.
 
-For `seed`, run the three seed scripts and merge their tab-separated output in
+For `seed`, run the four seed scripts and merge their tab-separated output in
 the agent workflow:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/seed-from-claude-mem.sh --project <project> --query <domain>
 ${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/seed-from-commits.sh --repo <repo>
 ${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/seed-from-gitnexus.sh --repo <repo> --repo-name <name>
+${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/seed-from-docs.sh --repo <repo> --repo-name <name>
 ```
 
 Treat the seed output as a candidate list. There is not yet a standalone merge
