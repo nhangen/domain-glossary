@@ -1,32 +1,48 @@
 ---
 name: domain-glossary
-description: Build and maintain source-grounded domain glossaries in Obsidian, seeded from claude-mem, GitNexus, commits, and notes, with citation drift checks.
-version: 0.1.0
+description: Source-grounded project glossary lookup and curation. **Use when the user asks "what is X?", "what does <ACRONYM> mean?", "define X", "explain <term>", or references any project-specific acronym, code-symbol, or domain noun in a registered repo — do not guess at expansions.** Auto-resolves the right glossary for the current cwd via a resolver script. Also handles `seed` (build candidates from claude-mem / commits / GitNexus / docs) and `drift-check` (verify every citation still resolves).
+version: 0.2.0
 author: nhangen
 ---
 
 # domain-glossary
 
-Status: Phase 1 drift-check and Phase 2 seed scripts are available (four
-sources: claude-mem, commits, gitnexus symbols, docs). The first Altamira
-glossary seed exists in Obsidian.
+A skill with three operations. The most common is the **first**: looking up a term the agent doesn't already know.
 
-## Current Behavior
+## Operation 1 — Look up a term (default)
 
-When invoked without a subcommand, identify the target domain and report the
-available commands.
+When the user mentions a term you can't ground in current context (acronyms like `GAMG`, `MMAE`, `LCR`; project-specific class names; ambiguous nouns), invoke this skill **before answering**. Do not guess at expansions.
 
-For `drift-check`, run:
+**Step 1.** Find the current working directory:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/drift-check.sh <glossary.md>
+pwd
 ```
 
-Add `--repo name=/absolute/path` when a glossary uses repo aliases that are not
-registered in GitNexus.
+**Step 2.** Resolve which glossary applies to that cwd. Run the resolver:
 
-For `seed`, run the four seed scripts and merge their tab-separated output in
-the agent workflow:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/resolve-domain.sh" "$(pwd)"
+```
+
+Output is `<domain>\t<glossary-absolute-path>` on stdout, or empty if no match (stderr explains why).
+
+The resolver handles all the parsing: YAML frontmatter in `domain-glossary.local.md`, longest-prefix matching, `~/`-expansion, and a git-worktree fallback (so a worktree sibling of a registered repo automatically resolves to the same domain). The agent does not need to parse YAML.
+
+**Step 3.** If the resolver emitted a path, read it with the Read tool. Glossary files use `### Term name` headings; entries carry `**Citation:**` lines pointing at code symbols, doc paths, or Obsidian notes.
+
+**Step 4.** Answer grounded in entries found there. If the term is in the glossary, cite the entry's citation back to the user (e.g. *"GAMG is G-Force Magnitude, the superior discrimination channel in the 42-channel analysis (`mtf-builder:docs/reports/.../PHASE1_COMPLETE_42CHANNEL_REPORT.md`)"*).
+
+**Step 5.** Handle the failure cases:
+- **Resolver emitted empty + stderr says "Config not found":** the user hasn't set up `domain-glossary.local.md` yet. Point them at `${CLAUDE_PLUGIN_ROOT}/domain-glossary.local.md.example` and stop.
+- **Resolver emitted empty + stderr says "does not match any registered domain":** the current repo isn't in the config. Tell the user, offer to add an entry, and answer the original question from non-glossary knowledge with an explicit hedge.
+- **Glossary was read but the term isn't in it:** say so explicitly. Do not invent an expansion. Offer to run `seed` on the matching repo to find candidates. Trust-grounding is the whole point of the skill — a fabricated definition is worse than "I don't know."
+
+This is the default invocation. Slash-commands `seed` and `drift-check` (below) are for curation, not lookup.
+
+## Operation 2 — Seed new candidate terms
+
+`/domain-glossary seed <domain>` — discover candidate terms for a domain by running all four seeders against its registered repos and presenting a ranked, deduped candidate list for user confirmation before writing.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/seed-from-claude-mem.sh --project <project> --query <domain>
@@ -35,41 +51,32 @@ ${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/seed-from-gitnexus.sh --rep
 ${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/seed-from-docs.sh --repo <repo> --repo-name <name>
 ```
 
-Treat the seed output as a candidate list. There is not yet a standalone merge
-script; the agent should merge and rank rows using `references/seed-protocol.md`.
-Do not write entries until the term, definition, and citation are confirmed.
+Merge the tab-separated rows using the protocol in `references/seed-protocol.md`. There is no standalone merge script; the agent does the merge. Do not write entries until term, definition, and citation are confirmed with the user.
 
-## Intended Workflow
+## Operation 3 — Drift-check
 
-1. Identify the domain from the user prompt, current repository, or configured
-   repo-to-domain map.
-2. Seed candidate terms from claude-mem observations, git commit messages, and
-   GitNexus symbol data.
-3. Ask the user to confirm or reject candidate terms.
-4. Resolve every citation before writing an entry.
-5. Write accepted entries to the Obsidian domain glossary.
-6. Run drift-check and report resolved, relocated, and unresolved citations.
+`/domain-glossary drift-check <glossary.md>` — walk every citation in a glossary, verify the symbol or path still exists, and report `RESOLVED` / `RELOCATED` / `UNRESOLVED`.
 
-## Altamira Defaults
-
-Initial domain: `Altamira`
-
-Initial repo alias:
-
-```text
-mtf-builder=/Users/nhangen/Library/Mobile Documents/com~apple~CloudDocs/Documents/WSU/Altamira/MTF/mtf-builder
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/drift-check.sh <glossary.md>
 ```
 
-Canonical glossary:
+Add `--repo name=/absolute/path` when a glossary uses repo aliases that are not registered in GitNexus.
 
-```text
-/Users/nhangen/Documents/Obsidian/Altamira/glossary.md
+## Setup (one-time, per machine)
+
+```bash
+cp ${CLAUDE_PLUGIN_ROOT}/domain-glossary.local.md.example \
+   ${CLAUDE_PLUGIN_ROOT}/domain-glossary.local.md
+# edit domain-glossary.local.md to register your domains + repo paths
 ```
+
+`*.local.md` is gitignored. No CLAUDE.md edits, no per-repo install — registering a new domain is one entry in this file and works automatically across every Claude Code session afterward.
 
 ## Hard Rules
 
 - Do not write uncited glossary entries.
+- Do not invent acronym expansions or term definitions. If the glossary doesn't have it, say so.
 - Treat Obsidian as the canonical glossary store.
-- Keep glossaries per-domain rather than per-repository.
-- Prefer symbol-name citations; fall back to file paths only when no stable
-  symbol exists.
+- Keep glossaries per-domain rather than per-repository — multiple repos can share one glossary via the `repos:` list.
+- Prefer symbol-name citations; fall back to file paths only when no stable symbol exists.

@@ -1,0 +1,39 @@
+---
+domains:
+  - name: Altamira
+    glossary: ~/Documents/Obsidian/Altamira/glossary.md
+    repos:
+      - /Users/nhangen/Library/Mobile Documents/com~apple~CloudDocs/Documents/WSU/Altamira/MTF/mtf-builder
+  - name: OptinMonster
+    glossary: ~/Documents/Obsidian/Awesome Motive/glossary.md
+    repos:
+      - /Users/nhangen/Local Sites/appoptinmonstertest/app/public/wp-content
+---
+
+# domain-glossary local config
+
+Copy this file to `domain-glossary.local.md` (same directory) and edit the
+paths to match your machine. `*.local.md` is gitignored.
+
+## Field reference
+
+- `name` — domain label used by `/domain-glossary seed` and the glossary's
+  storage path. Free-form string (e.g. `Altamira`, `OptinMonster`).
+- `glossary` — absolute path (or `~/`-prefixed) to the glossary file in your
+  Obsidian vault.
+- `repos` — list of absolute repo paths that map to this domain. Longest-prefix
+  match wins, so worktrees siblings (e.g. `mtf-builder-feature-x`) are caught
+  automatically.
+
+## How the skill uses this
+
+When the agent invokes `domain-glossary` (typically because the user mentioned
+an unfamiliar acronym or project-specific term), the skill:
+
+1. Reads this config.
+2. Resolves the current cwd to a domain via longest-prefix match on `repos`.
+3. Reads the matching `glossary` file with the Read tool.
+4. Answers grounded in entries found there, or reports "not in glossary."
+
+No per-repo install or CLAUDE.md edits required. Add a new domain by appending
+to the `domains:` list.
