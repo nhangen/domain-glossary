@@ -51,6 +51,7 @@ All scripts live under `skills/domain-glossary/scripts/` and can be run directly
 | `seed-from-commits.sh --repo <path> [--since <date>]` | Candidate terms by phrase frequency in git log. |
 | `seed-from-gitnexus.sh --repo <path> --repo-name <alias>` | Candidate terms from symbol definitions (GitNexus when present, grep fallback). |
 | `seed-from-docs.sh --repo <path> --repo-name <alias>` | Candidate terms from READMEs, `docs/**`, module READMEs, and Python module/class docstrings. |
+| `resolve-domain.sh [cwd]` | Resolve the current working directory to `<domain>\t<glossary-path>` via `domain-glossary.local.md` (with git-worktree fallback). Used by the skill's lookup operation. |
 | `render-repo-mirror.sh --source <vault.md> --dest <repo/docs/glossary.md>` | Copy vault glossary to a repo mirror with provenance header. |
 
 ## Citation forms
@@ -140,6 +141,7 @@ domains:
 ./tests/test-drift-check.sh
 ./tests/test-seeders.sh
 ./tests/test-seed-from-docs.sh
+./tests/test-resolve-domain.sh
 ./tests/test-render-repo-mirror.sh
 ```
 

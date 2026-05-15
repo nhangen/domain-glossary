@@ -1,26 +1,42 @@
 ---
 name: domain-glossary
-description: Source-grounded project glossary lookup and curation. **Invoke whenever you encounter an unfamiliar acronym, project-specific term, code-symbol name, or domain noun in a known project repo — do not guess at expansions.** Auto-resolves the right glossary for the current cwd. Also handles `seed` (build candidate terms from claude-mem / commits / GitNexus / docs) and `drift-check` (verify every citation still resolves).
+description: Source-grounded project glossary lookup and curation. **Use when the user asks "what is X?", "what does <ACRONYM> mean?", "define X", "explain <term>", or references any project-specific acronym, code-symbol, or domain noun in a registered repo — do not guess at expansions.** Auto-resolves the right glossary for the current cwd via a resolver script. Also handles `seed` (build candidates from claude-mem / commits / GitNexus / docs) and `drift-check` (verify every citation still resolves).
 version: 0.2.0
 author: nhangen
 ---
 
 # domain-glossary
 
-A skill with three operations, but the most common is the **first**: looking up a term the agent doesn't already know.
+A skill with three operations. The most common is the **first**: looking up a term the agent doesn't already know.
 
 ## Operation 1 — Look up a term (default)
 
-When the user mentions a term you can't ground in current context (acronyms like `GAMG`, `MMAE`, `LCR`; project-specific class names; ambiguous nouns), invoke this skill **before answering**. Do not guess at expansions. Steps:
+When the user mentions a term you can't ground in current context (acronyms like `GAMG`, `MMAE`, `LCR`; project-specific class names; ambiguous nouns), invoke this skill **before answering**. Do not guess at expansions.
 
-1. **Resolve the current domain** from the active cwd:
-   - Read `${CLAUDE_PLUGIN_ROOT}/domain-glossary.local.md` (frontmatter YAML).
-   - For each entry under `domains:`, longest-prefix-match the current working directory against the entry's `repos:` list.
-   - The matching entry's `name` is the domain; its `glossary:` is the file to read.
-   - If no entry matches: the user's repo is not registered; report that and ask whether to add it to `domain-glossary.local.md` (`${CLAUDE_PLUGIN_ROOT}/domain-glossary.local.md.example` is the template).
-2. **Read the glossary** with the Read tool. Glossary files use `### Term name` headings; entries carry `**Citation:**` lines pointing at code symbols, doc paths, or Obsidian notes.
-3. **Answer grounded** in entries found there. If the term is in the glossary, cite the entry's citation back to the user (e.g. *"GAMG is G-Force Magnitude, the superior discrimination channel in the 42-channel analysis (`mtf-builder:docs/reports/.../PHASE1_COMPLETE_42CHANNEL_REPORT.md`)"*).
-4. **If the term isn't there:** say so explicitly. Do not invent an expansion. Offer to run `seed` on the matching repo or ask the user to clarify. Trust-grounding is the whole point of the skill — a fabricated definition is worse than "I don't know."
+**Step 1.** Find the current working directory:
+
+```bash
+pwd
+```
+
+**Step 2.** Resolve which glossary applies to that cwd. Run the resolver:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/resolve-domain.sh" "$(pwd)"
+```
+
+Output is `<domain>\t<glossary-absolute-path>` on stdout, or empty if no match (stderr explains why).
+
+The resolver handles all the parsing: YAML frontmatter in `domain-glossary.local.md`, longest-prefix matching, `~/`-expansion, and a git-worktree fallback (so a worktree sibling of a registered repo automatically resolves to the same domain). The agent does not need to parse YAML.
+
+**Step 3.** If the resolver emitted a path, read it with the Read tool. Glossary files use `### Term name` headings; entries carry `**Citation:**` lines pointing at code symbols, doc paths, or Obsidian notes.
+
+**Step 4.** Answer grounded in entries found there. If the term is in the glossary, cite the entry's citation back to the user (e.g. *"GAMG is G-Force Magnitude, the superior discrimination channel in the 42-channel analysis (`mtf-builder:docs/reports/.../PHASE1_COMPLETE_42CHANNEL_REPORT.md`)"*).
+
+**Step 5.** Handle the failure cases:
+- **Resolver emitted empty + stderr says "Config not found":** the user hasn't set up `domain-glossary.local.md` yet. Point them at `${CLAUDE_PLUGIN_ROOT}/domain-glossary.local.md.example` and stop.
+- **Resolver emitted empty + stderr says "does not match any registered domain":** the current repo isn't in the config. Tell the user, offer to add an entry, and answer the original question from non-glossary knowledge with an explicit hedge.
+- **Glossary was read but the term isn't in it:** say so explicitly. Do not invent an expansion. Offer to run `seed` on the matching repo to find candidates. Trust-grounding is the whole point of the skill — a fabricated definition is worse than "I don't know."
 
 This is the default invocation. Slash-commands `seed` and `drift-check` (below) are for curation, not lookup.
 
