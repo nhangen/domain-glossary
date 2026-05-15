@@ -80,6 +80,22 @@ class RawClass:
     pass
 PY
 
+cat >"$REPO/single_quote.py" <<'PY'
+'''Tri-quote single-quoted docstring naming the Resonance Probe.'''
+
+
+class SQClass:
+    '''Single-quoted class docstring for the Mirror Cascade.'''
+    pass
+PY
+
+cat >"$REPO/notes.md" <<'MD'
+# Notes
+
+The README file is generated. See USAGE for command syntax.
+Refer to ARCHITECTURE for system overview.
+MD
+
 git -C "$REPO" add .
 git -C "$REPO" commit -m "Seed fixture repo" >/dev/null
 
@@ -139,6 +155,16 @@ assert_in "Bridges Smooth"
 # Raw/format-prefixed docstrings
 assert_in "Quintic Bridge"
 assert_in "Token Vault"
+
+# Triple-single-quote docstrings (''')
+assert_in "Resonance Probe"
+assert_in "Mirror Cascade"
+assert_in "SQClass"
+
+# SHOUT-CASE doc-section acronyms suppressed
+assert_not_in "	README	"
+assert_not_in "	USAGE	"
+assert_not_in "	ARCHITECTURE	"
 
 # Code-block contents excluded
 assert_not_in "secret_only_in_code_block_token"

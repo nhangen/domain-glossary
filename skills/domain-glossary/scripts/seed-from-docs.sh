@@ -174,7 +174,7 @@ extract() {
       ;;
     *.py)
       awk -v file="$rel" '
-        BEGIN { in_doc = 0; buf = "" }
+        BEGIN { in_doc = 0; quote = ""; buf = "" }
         function flush() {
           if (buf != "") {
             gsub(/[[:space:]]+/, " ", buf)
@@ -213,23 +213,33 @@ extract() {
             print "TICK\t" classline "\t" file
           }
           if (in_doc) {
-            if (line ~ /"""/) {
-              sub(/""".*$/, "", line)
-              buf = buf " " line
+            close_re = (quote == "'\''" ? "'\'''\'''\''" : "\"\"\"")
+            if (index(line, close_re) > 0) {
+              tail_pos = index(line, close_re)
+              prefix = substr(line, 1, tail_pos - 1)
+              buf = buf " " prefix
               in_doc = 0
+              quote = ""
               flush()
             } else {
               buf = buf " " line
             }
             next
           }
-          # Module/class/function docstring: plain """ with optional r/b/f/u prefix
-          if (line ~ /^[[:space:]]*[rRbBuUfF]?"""/) {
-            content = line
-            sub(/^[[:space:]]*[rRbBuUfF]?"""/, "", content)
-            if (content ~ /"""/) {
-              sub(/""".*$/, "", content)
-              buf = content
+          # Module/class/function docstring: """ or '\'''\'''\'' with optional r/b/f/u prefix.
+          if (match(line, /^[[:space:]]*[rRbBuUfF]?"""/) || match(line, /^[[:space:]]*[rRbBuUfF]?'\'''\'''\''/)) {
+            opener_end = RSTART + RLENGTH - 1
+            # Detect which quote sequence opened.
+            seg = substr(line, RSTART, RLENGTH)
+            if (index(seg, "\"\"\"") > 0) quote = "\""
+            else quote = "'\''"
+            close_re = (quote == "'\''" ? "'\'''\'''\''" : "\"\"\"")
+            content = substr(line, opener_end + 1)
+            tail_pos = index(content, close_re)
+            if (tail_pos > 0) {
+              buf = substr(content, 1, tail_pos - 1)
+              in_doc = 0
+              quote = ""
               flush()
             } else {
               buf = content
@@ -315,6 +325,8 @@ PHRASE_STOPLIST="^(Pull Request|Pull Requests|MIT License|Apache License|GNU Lic
       if (kind == "ACRONYM") {
         if (term !~ /^[A-Z][A-Z0-9]+$/) next
         if (length(term) < 2) next
+        # Reject doc section-name acronyms commonly typed as SHOUT-CASE.
+        if (term ~ /^(README|USAGE|INSTALL|INSTALLATION|LICENSE|CHANGELOG|NOTES|TODO|FIXME|CONTRIBUTING|AUTHORS|CREDITS|ACKNOWLEDGMENTS|OVERVIEW|INTRODUCTION|SETUP|REQUIREMENTS|DEPENDENCIES|REFERENCES|SUMMARY|DESCRIPTION|STATUS|ARCHITECTURE|ROADMAP|HOWTO|FAQ|NOTE|WARNING|CAUTION|IMPORTANT|TIP|TBD|TBA|N\/A|NA|OK)$/) next
       }
       key = tolower(term)
       count[key]++
