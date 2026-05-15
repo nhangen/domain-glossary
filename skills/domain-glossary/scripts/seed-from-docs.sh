@@ -13,7 +13,7 @@ Usage:
 Options:
   --repo <path>       Repository path to scan. Defaults to current directory.
   --repo-name <name>  Repo alias for output citations. Defaults to repo basename.
-  --limit <n>         Maximum rows. Default: 50.
+  --limit <n>         Maximum rows (non-negative integer). Default: 50.
   -h, --help          Show this help.
 
 Output columns:
@@ -23,21 +23,32 @@ Surfaces scanned:
   README.md, AGENTS.md, CLAUDE.md, CONTEXT.md at repo root
   docs/**/*.md (depth <= 4)
   */**/README.md outside docs/
-  Python module + class docstrings
+  Python module + class docstrings (plain """, r""", b""", f""", u""")
 USAGE
+}
+
+require_value() {
+  if [[ $# -lt 2 ]]; then
+    echo "Missing value for $1" >&2
+    usage >&2
+    exit 2
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo)
+      require_value "$@"
       REPO="$2"
       shift 2
       ;;
     --repo-name)
+      require_value "$@"
       REPO_NAME="$2"
       shift 2
       ;;
     --limit)
+      require_value "$@"
       LIMIT="$2"
       shift 2
       ;;
@@ -52,6 +63,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ ! "$LIMIT" =~ ^[0-9]+$ ]]; then
+  echo "Invalid --limit: $LIMIT (must be a non-negative integer)" >&2
+  exit 2
+fi
 
 if [[ ! -d "$REPO" ]]; then
   echo "Repo not found: $REPO" >&2
@@ -126,19 +142,30 @@ extract() {
             print "BOLD\t" term "\t" file
             s = substr(s, RSTART + RLENGTH)
           }
-          # Backticked symbols
+          # Backticked symbols (widened to permit /, -)
           s = line
-          while (match(s, /`[A-Za-z_][A-Za-z0-9_.]*`/)) {
+          while (match(s, /`[A-Za-z_][-A-Za-z0-9_.\/]*`/)) {
             chunk = substr(s, RSTART + 1, RLENGTH - 2)
             print "TICK\t" chunk "\t" file
             s = substr(s, RSTART + RLENGTH)
           }
-          # Capitalized noun phrases (2+ Title Case tokens) in prose
+          # Prose-only patterns (skip heading lines)
           if (line !~ /^#/) {
+            # Capitalized noun phrases (2+ Title Case tokens)
             s = line
             while (match(s, /[A-Z][A-Za-z0-9]+([[:space:]]+[A-Z][A-Za-z0-9]+)+/)) {
               phrase = substr(s, RSTART, RLENGTH)
               print "PHRASE\t" phrase "\t" file
+              s = substr(s, RSTART + RLENGTH)
+            }
+            # Acronyms (>=2 uppercase letters/digits, leading alpha)
+            s = line
+            while (match(s, /(^|[^A-Za-z0-9])[A-Z][A-Z0-9]+([^A-Za-z0-9]|$)/)) {
+              chunk = substr(s, RSTART, RLENGTH)
+              # Strip leading/trailing non-alnum captured by the boundary
+              sub(/^[^A-Za-z0-9]+/, "", chunk)
+              sub(/[^A-Za-z0-9]+$/, "", chunk)
+              if (length(chunk) >= 2) print "ACRONYM\t" chunk "\t" file
               s = substr(s, RSTART + RLENGTH)
             }
           }
@@ -152,21 +179,26 @@ extract() {
           if (buf != "") {
             gsub(/[[:space:]]+/, " ", buf)
             sub(/^ /, "", buf); sub(/ $/, "", buf)
-            # First sentence
             sentence = buf
             if (match(sentence, /\./)) sentence = substr(sentence, 1, RSTART - 1)
-            # Capitalized phrases in the docstring
             s = sentence
-            while (match(s, /[A-Z][A-Za-z0-9]+([[:space:]]+[A-Za-z][A-Za-z0-9]+)+/)) {
+            while (match(s, /[A-Z][A-Za-z0-9]+([[:space:]]+[A-Z][A-Za-z0-9]+)+/)) {
               phrase = substr(s, RSTART, RLENGTH)
               print "PHRASE\t" phrase "\t" file
               s = substr(s, RSTART + RLENGTH)
             }
-            # Backticked items
             s = sentence
-            while (match(s, /`[A-Za-z_][A-Za-z0-9_.]*`/)) {
+            while (match(s, /`[A-Za-z_][-A-Za-z0-9_.\/]*`/)) {
               chunk = substr(s, RSTART + 1, RLENGTH - 2)
               print "TICK\t" chunk "\t" file
+              s = substr(s, RSTART + RLENGTH)
+            }
+            s = sentence
+            while (match(s, /(^|[^A-Za-z0-9])[A-Z][A-Z0-9]+([^A-Za-z0-9]|$)/)) {
+              chunk = substr(s, RSTART, RLENGTH)
+              sub(/^[^A-Za-z0-9]+/, "", chunk)
+              sub(/[^A-Za-z0-9]+$/, "", chunk)
+              if (length(chunk) >= 2) print "ACRONYM\t" chunk "\t" file
               s = substr(s, RSTART + RLENGTH)
             }
             buf = ""
@@ -174,6 +206,12 @@ extract() {
         }
         {
           line = $0
+          # Class identifiers are first-class glossary candidates.
+          if (match(line, /^[[:space:]]*class[[:space:]]+[A-Z][A-Za-z0-9_]+/)) {
+            classline = substr(line, RSTART, RLENGTH)
+            sub(/^[[:space:]]*class[[:space:]]+/, "", classline)
+            print "TICK\t" classline "\t" file
+          }
           if (in_doc) {
             if (line ~ /"""/) {
               sub(/""".*$/, "", line)
@@ -185,10 +223,10 @@ extract() {
             }
             next
           }
-          # Module-level docstring (no leading indent) or class-level (indented)
-          if (line ~ /^[[:space:]]*"""/) {
+          # Module/class/function docstring: plain """ with optional r/b/f/u prefix
+          if (line ~ /^[[:space:]]*[rRbBuUfF]?"""/) {
             content = line
-            sub(/^[[:space:]]*"""/, "", content)
+            sub(/^[[:space:]]*[rRbBuUfF]?"""/, "", content)
             if (content ~ /"""/) {
               sub(/""".*$/, "", content)
               buf = content
@@ -204,55 +242,90 @@ extract() {
   esac
 }
 
-STOPLIST="^(The|This|That|These|Those|And|But|For|From|With|Into|About|After|Before|When|While|Where|There|Their|They|Them|Then|Than|Will|Would|Should|Could|Have|Has|Been|Being|Note|Notes|Usage|Example|Examples|Installation|Install|Configuration|Config|License|Overview|Introduction|Getting Started|Quick Start|Description|Summary|Status|TODO|FIXME|Why|How|What|See Also|References|Setup|Requirements|Dependencies|Changelog|Contributing|Authors|Credits|Acknowledgments|PR|Commit|Branch|Merge|Fix|Feat|Chore|Docs|Test|Tests|Pull Request)$"
+STOPLIST="^(The|This|That|These|Those|And|But|For|From|With|Into|About|After|Before|When|While|Where|There|Their|They|Them|Then|Than|Will|Would|Should|Could|Have|Has|Been|Being|Note|Notes|Usage|Example|Examples|Installation|Install|Configuration|Config|License|Overview|Introduction|Getting Started|Quick Start|Description|Summary|Status|TODO|FIXME|Why|How|What|See Also|References|Setup|Requirements|Dependencies|Changelog|Contributing|Authors|Credits|Acknowledgments|PR|Commit|Branch|Merge|Fix|Feat|Chore|Docs|Test|Tests|Pull Request|Pull Requests)$"
+
+# Connector tokens that should never be the first or last word of a meaningful phrase.
+CONNECTORS="^(Of|And|The|For|From|With|Into|About|On|By|To|A|An|In|At|As|Is|Are|Be|Or|But|However|Therefore|Also|Thus|Then|So|Yet)$"
+
+# Multi-word phrase stoplist (full-phrase rejects).
+PHRASE_STOPLIST="^(Pull Request|Pull Requests|MIT License|Apache License|GNU License|GitHub Actions|GitHub Pages|Table Of Contents|Code Of Conduct|Quick Start|Getting Started|Open Source|Read Me|Read The|See Also|Best Practices|Hello World)$"
 
 {
   while IFS= read -r f; do
     extract "$f"
   done <"$FILES_TMP"
 } |
-  awk -F '\t' -v name="$REPO_NAME" -v stoplist="$STOPLIST" '
+  awk -F '\t' \
+      -v name="$REPO_NAME" \
+      -v stoplist="$STOPLIST" \
+      -v connectors="$CONNECTORS" \
+      -v phrase_stoplist="$PHRASE_STOPLIST" '
     function trim(s) {
       sub(/^[[:space:]]+/, "", s)
       sub(/[[:space:]]+$/, "", s)
       return s
     }
     function is_meta(t) {
-      return t ~ ("\\<" "(PR|commit|branch|merge|fix|feat|chore|docs|test|Closes|Fixes|Resolves)" "\\>")
+      return tolower(t) ~ /(^|[^a-z0-9])(pr|commit|branch|merge|fix|feat|chore|docs|test|closes|fixes|resolves)([^a-z0-9]|$)/
+    }
+    function uc_count(s,    i, n, c) {
+      n = 0
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (c >= "A" && c <= "Z") n++
+      }
+      return n
     }
     {
       kind = $1
       term = trim($2)
       file = $3
       if (term == "") next
-      if (length(term) < 3) next
-      # Single-word common-English drop list (anchored)
+      if (length(term) < 3 && kind != "ACRONYM") next
       if (term ~ stoplist) next
-      # Project-meta phrases
       if (is_meta(term)) next
-      # Headings: only keep if term-shaped (not section-y)
+      if (term ~ phrase_stoplist) next
       if (kind == "HEADING") {
         if (tolower(term) ~ /^(installation|usage|license|example|examples|overview|introduction|getting started|quick start|description|summary|status|todo|why|how|what|see also|references|setup|requirements|dependencies|changelog|contributing|authors|credits|acknowledgments|configuration|config|notes|note|api|cli|scripts|commands|tests|tests passing|hard rules|known limitations|evaluation status|current status|citation forms|examples)$/) next
         if (term ~ /\?$/) next
       }
-      # Backticked: require identifier shape, length >= 3
       if (kind == "TICK") {
-        if (term !~ /^[A-Za-z_][A-Za-z0-9_.]*$/) next
+        if (term !~ /^[A-Za-z_][-A-Za-z0-9_.\/]*$/) next
         if (length(term) < 3) next
+        # Reject trivial bare paths (./, ../) and lone separators.
+        if (term ~ /^[\.\/-]+$/) next
       }
-      # PHRASE: at least 2 tokens, each starts uppercase
       if (kind == "PHRASE") {
         if (term !~ /^[A-Z]/) next
         n = split(term, toks, " ")
         if (n < 2) next
+        # Strip leading/trailing connector tokens (e.g. "The", "However", "Of").
+        first = 1
+        last = n
+        while (first <= last && toks[first] ~ connectors) first++
+        while (last >= first && toks[last] ~ connectors) last--
+        if (last - first + 1 < 2) next
+        if (first != 1 || last != n) {
+          stripped = toks[first]
+          for (i = first + 1; i <= last; i++) stripped = stripped " " toks[i]
+          term = stripped
+          if (term !~ /^[A-Z]/) next
+        }
       }
-      key = term
+      if (kind == "ACRONYM") {
+        if (term !~ /^[A-Z][A-Z0-9]+$/) next
+        if (length(term) < 2) next
+      }
+      key = tolower(term)
       count[key]++
+      if (!(key in display) || uc_count(term) > uc_count(display[key])) {
+        display[key] = term
+      }
       if (!(key in citation)) citation[key] = name ":" file
     }
     END {
       for (k in count) {
-        printf "%s\t%d\tdocs\t%s\n", k, count[k], citation[k]
+        printf "%s\t%d\tdocs\t%s\n", display[k], count[k], citation[k]
       }
     }
   ' |
