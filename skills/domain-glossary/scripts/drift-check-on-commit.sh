@@ -116,10 +116,19 @@ run_check() {
 import json, sys
 try:
     s = json.loads(sys.argv[1])
-except Exception as e:
+except Exception:
     print("PARSE_ERROR", file=sys.stderr)
     sys.exit(0)
-print(f"{s.get('resolved',0)}\t{s.get('relocated',0)}\t{s.get('unresolved',0)}\t{s.get('glossaries_missing',0)}")
+# Schema-strict: every count key must be present. A valid JSON object that
+# is missing a key would otherwise default to 0 here, which would silently
+# clear an active firing alert. Empty stdout triggers the [[ -z $counts ]]
+# guard below and preserves prior state.
+required = ("resolved", "relocated", "unresolved", "glossaries_missing")
+missing = [k for k in required if k not in s]
+if missing:
+    print("MISSING_KEYS: " + ",".join(missing), file=sys.stderr)
+    sys.exit(0)
+print(f"{s['resolved']}\t{s['relocated']}\t{s['unresolved']}\t{s['glossaries_missing']}")
 PY
 )"
   if [[ -z "$counts" ]]; then

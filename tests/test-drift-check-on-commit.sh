@@ -116,6 +116,44 @@ AFTER_HASH="$(shasum "$ALERT" | awk '{print $1}')"
 [[ "$BEFORE_HASH" == "$AFTER_HASH" ]] || { echo "FAIL: alert file mutated on timeout"; exit 1; }
 echo "PASS: timeout enforced; state file preserved"
 
+# --- Test 4b: malformed JSON summary preserves state (schema-strict parser) ---
+cat >"$STUB_DIR/drift-check-all.sh" <<'STUB'
+#!/usr/bin/env bash
+# Emits a valid JSON object that's missing one of the four required count
+# keys. Pre-fix, the parser defaulted missing keys to 0 and the firing alert
+# would be silently overwritten with status=clear.
+echo '{"summary":true,"resolved":0,"relocated":0,"unresolved":0}'
+STUB
+chmod +x "$STUB_DIR/drift-check-all.sh"
+
+# Seed a firing alert so we can detect a regression that clears it.
+mkdir -p "$CEO_VAULT/CEO/alerts"
+cat >"$ALERT" <<'PRIOR'
+---
+status: firing
+since: 2026-01-01T00:00:00Z
+last_check: 2026-01-01T00:00:00Z
+resolved: 0
+relocated: 1
+unresolved: 0
+glossaries_missing: 0
+writer: domain-glossary
+---
+
+# Glossary Drift
+
+1 citation(s) need review.
+PRIOR
+BEFORE_HASH="$(shasum "$ALERT" | awk '{print $1}')"
+DRIFT_CHECK_FOREGROUND=1 \
+  DRIFT_CHECK_TIMEOUT_SECS=10 \
+  CEO_VAULT="$CEO_VAULT" \
+  DOMAIN_GLOSSARY_CONFIG="$CONFIG" \
+  "$HOOK_COPY" 2>"$TMP/stderr4b.log"
+AFTER_HASH="$(shasum "$ALERT" | awk '{print $1}')"
+[[ "$BEFORE_HASH" == "$AFTER_HASH" ]] || { echo "FAIL: malformed JSON cleared firing state"; cat "$ALERT"; exit 1; }
+echo "PASS: malformed JSON summary preserves prior state"
+
 # --- Test 5: detached mode returns quickly (python-based timer for portability) ---
 ELAPSED_MS=$(python3 -c '
 import os, sys, time, subprocess
