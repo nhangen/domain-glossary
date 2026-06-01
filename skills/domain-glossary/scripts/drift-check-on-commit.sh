@@ -24,7 +24,9 @@
 #
 # Exit status: 0 always (we don't block the parent). Failures land in stderr.
 
-set -u
+set -uo pipefail
+
+: "${HOME:?HOME must be set before drift-check-on-commit}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DRIFT_CHECK_ALL="$SCRIPT_DIR/drift-check-all.sh"
