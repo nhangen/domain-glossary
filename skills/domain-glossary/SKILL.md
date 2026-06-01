@@ -63,6 +63,16 @@ ${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/drift-check.sh <glossary.md
 
 Add `--repo name=/absolute/path` when a glossary uses repo aliases that are not registered in GitNexus.
 
+To check every configured domain at once:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/drift-check-all.sh
+```
+
+Repo aliases for `drift-check-all` are derived from the basename of each path in `domain-glossary.local.md`'s `repos:` list. Exit status is the count of drifted citations (capped at 255).
+
+For automated post-commit invocation, see `drift-check-on-commit.sh` and `docs/playbooks/glossary-drift.md` — the hook detaches under a 30 s hard timeout and writes a state file to `$CEO_VAULT/CEO/alerts/glossary-drift.md`.
+
 ## Setup (one-time, per machine)
 
 ```bash
