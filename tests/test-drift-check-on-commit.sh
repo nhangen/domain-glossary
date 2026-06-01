@@ -187,23 +187,64 @@ wait "$A_PID"
 grep -q "^relocated: 1" "$ALERT" || { echo "FAIL: A's content missing"; cat "$ALERT"; exit 1; }
 echo "PASS: concurrent run skipped while lock held"
 
-# --- Test 5: detached mode returns quickly (python-based timer for portability) ---
-ELAPSED_MS=$(python3 -c '
+# --- Test 5: detached mode actually detaches ---
+# The previous version only timed wallclock, which would have passed even if
+# the hook ran the (fast) real fixture synchronously. Use a sleeping stub so a
+# foreground regression would block the parent for the sleep duration. Then
+# assert (a) hook returns quickly and (b) the background worker is still alive
+# while the parent has already returned.
+DETACH_DIR="$TMP/detach"
+mkdir -p "$DETACH_DIR"
+cat >"$DETACH_DIR/drift-check-all.sh" <<'STUB'
+#!/usr/bin/env bash
+# Touch a marker on entry, sleep, touch a second marker on exit. The test
+# uses these to verify the worker actually ran asynchronously.
+touch "${DRIFT_DETACH_MARKER_DIR:?DRIFT_DETACH_MARKER_DIR must be set}/started"
+sleep 4
+touch "$DRIFT_DETACH_MARKER_DIR/finished"
+echo '{"summary":true,"resolved":0,"relocated":0,"unresolved":0,"glossaries_missing":0}'
+STUB
+chmod +x "$DETACH_DIR/drift-check-all.sh"
+DETACH_HOOK="$DETACH_DIR/drift-check-on-commit.sh"
+cp "$HOOK" "$DETACH_HOOK"
+MARKER_DIR="$TMP/detach-markers"
+mkdir -p "$MARKER_DIR"
+
+# Use a fresh CEO_VAULT so we don't collide with the lockdir from earlier tests.
+DETACH_VAULT="$TMP/detach-vault"
+mkdir -p "$DETACH_VAULT/CEO/alerts"
+
+ELAPSED_MS=$(
+  DRIFT_CHECK_TIMEOUT_SECS=30 \
+  CEO_VAULT="$DETACH_VAULT" \
+  DOMAIN_GLOSSARY_CONFIG="$CONFIG" \
+  DRIFT_DETACH_MARKER_DIR="$MARKER_DIR" \
+  python3 -c '
 import os, sys, time, subprocess
-env = os.environ.copy()
-env["DRIFT_CHECK_TIMEOUT_SECS"] = "10"
-env["CEO_VAULT"] = sys.argv[2]
-env["DOMAIN_GLOSSARY_CONFIG"] = sys.argv[3]
 start = time.time()
-subprocess.run([sys.argv[1]], env=env, check=True)
+subprocess.run([sys.argv[1]], check=True)
 print(int((time.time() - start) * 1000))
-' "$HOOK" "$CEO_VAULT" "$CONFIG")
-if [[ "$ELAPSED_MS" -lt 2000 ]]; then
-  echo "PASS: detached mode returns in ${ELAPSED_MS}ms"
-else
-  echo "FAIL: detached mode took ${ELAPSED_MS}ms"
+' "$DETACH_HOOK"
+)
+
+if [[ "$ELAPSED_MS" -ge 2000 ]]; then
+  echo "FAIL: hook did not detach (took ${ELAPSED_MS}ms with a 4s stub)"
   exit 1
 fi
+
+# The worker must still be running — `finished` marker absent, `started` present.
+sleep 0.5
+[[ -f "$MARKER_DIR/started" ]] || { echo "FAIL: stub never started — detach didn't fire the worker"; exit 1; }
+[[ ! -f "$MARKER_DIR/finished" ]] || { echo "FAIL: stub finished before parent returned — not actually async"; exit 1; }
+
+# Wait for the worker to finish so the alert appears.
+for _ in $(seq 1 50); do
+  [[ -f "$MARKER_DIR/finished" ]] && break
+  sleep 0.2
+done
+[[ -f "$MARKER_DIR/finished" ]] || { echo "FAIL: stub never finished"; exit 1; }
+[[ -f "$DETACH_VAULT/CEO/alerts/glossary-drift.md" ]] || { echo "FAIL: alert never written"; exit 1; }
+echo "PASS: detached mode runs worker async (hook returned in ${ELAPSED_MS}ms)"
 
 # Wait briefly to give background child a chance to finish writing the alert
 # so it doesn't outlive the test directory.
