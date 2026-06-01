@@ -132,4 +132,22 @@ set -e
 [[ "$RC" -eq 0 ]] || { echo "FAIL: clean glossary expected exit 0, got $RC"; exit 1; }
 echo "PASS: clean glossary exits 0"
 
+# --- Test 5: per-domain check_failed surfaces (not silent zeros) ---
+# Point a domain at a glossary file that drift-check.sh will reject (no
+# Citation lines → exits 1 with stderr). Verify drift-check-all emits a
+# check_failed status, increments TOTAL_FAILED, and contributes to drift sum.
+cat >"$VAULT/Altamira/glossary.md" <<'MD'
+### Bogus
+
+This glossary has no Citation lines so drift-check.sh exits 1.
+MD
+set +e
+"$DRIFT_ALL" --config "$CONFIG" --json > "$TMP/check_failed.json" 2>&1
+RC=$?
+set -e
+grep -q '"status":"check_failed"' "$TMP/check_failed.json" || { echo "FAIL: check_failed status not emitted"; cat "$TMP/check_failed.json"; exit 1; }
+grep -q '"check_failed":1' "$TMP/check_failed.json" || { echo "FAIL: check_failed not in summary"; cat "$TMP/check_failed.json"; exit 1; }
+[[ "$RC" -ge 1 ]] || { echo "FAIL: check_failed should produce non-zero exit"; exit 1; }
+echo "PASS: per-domain check_failed surfaces in JSON and exit status"
+
 echo "ALL PASS"

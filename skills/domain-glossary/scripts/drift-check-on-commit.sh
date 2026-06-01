@@ -140,33 +140,31 @@ run_check() {
   fi
 
   # Extract counts with a tiny python helper (no jq dependency).
+  # NOTE: bash 3.2 mis-parses $(python3 - <<'PY' ... PY) when the body
+  # contains certain quote shapes; pass the summary as stdin instead.
   local counts
-  counts="$(python3 - "$summary" <<'PY'
+  counts="$(printf '%s' "$summary" | python3 -c '
 import json, sys
 try:
-    s = json.loads(sys.argv[1])
+    s = json.loads(sys.stdin.read())
 except Exception:
     print("PARSE_ERROR", file=sys.stderr)
     sys.exit(0)
-# Schema-strict: every count key must be present. A valid JSON object that
-# is missing a key would otherwise default to 0 here, which would silently
-# clear an active firing alert. Empty stdout triggers the [[ -z $counts ]]
-# guard below and preserves prior state.
 required = ("resolved", "relocated", "unresolved", "glossaries_missing")
 missing = [k for k in required if k not in s]
 if missing:
     print("MISSING_KEYS: " + ",".join(missing), file=sys.stderr)
     sys.exit(0)
-print(f"{s['resolved']}\t{s['relocated']}\t{s['unresolved']}\t{s['glossaries_missing']}")
-PY
-)"
+print("{0}\t{1}\t{2}\t{3}\t{4}".format(s["resolved"], s["relocated"], s["unresolved"], s["glossaries_missing"], s.get("check_failed", 0)))
+')"
   if [[ -z "$counts" ]]; then
     echo "glossary-drift: failed to parse summary: $summary" >&2
     return 0
   fi
-  IFS=$'\t' read -r resolved relocated unresolved missing <<<"$counts"
+  IFS=$'\t' read -r resolved relocated unresolved missing check_failed <<<"$counts"
+  : "${check_failed:=0}"
 
-  local drift=$((relocated + unresolved + missing))
+  local drift=$((relocated + unresolved + missing + check_failed))
   local status timestamp since prior_status prior_since
   timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   if [[ "$drift" -gt 0 ]]; then
@@ -175,14 +173,27 @@ PY
     status="clear"
   fi
 
-  # Preserve `since` across runs in the same status.
+  # Preserve `since` across runs in the same status. If the prior file exists
+  # but lacks a parseable `status:` frontmatter field, treat it as corruption
+  # and preserve `prior_since` rather than resetting — mirrors the disk-monitor
+  # measurement_failed invariant (transient corruption shouldn't reset the
+  # firing-start timestamp).
   prior_status=""
   prior_since=""
   if [[ -f "$ALERT_FILE" ]]; then
     prior_status="$(sed -n 's/^status:[[:space:]]*//p' "$ALERT_FILE" | head -n 1)"
     prior_since="$(sed -n 's/^since:[[:space:]]*//p' "$ALERT_FILE" | head -n 1)"
   fi
-  if [[ "$status" == "$prior_status" && -n "$prior_since" ]]; then
+  if [[ -f "$ALERT_FILE" && -z "$prior_status" ]]; then
+    # Corrupt prior file: status field missing/unreadable. Preserve since if we
+    # could still parse it; otherwise fall through to current timestamp.
+    if [[ -n "$prior_since" ]]; then
+      since="$prior_since"
+    else
+      since="$timestamp"
+    fi
+    echo "glossary-drift: prior alert file lacks parseable status; preserving since" >&2
+  elif [[ "$status" == "$prior_status" && -n "$prior_since" ]]; then
     since="$prior_since"
   else
     since="$timestamp"
@@ -224,6 +235,7 @@ for line in sys.stdin:
     echo "relocated: $relocated"
     echo "unresolved: $unresolved"
     echo "glossaries_missing: $missing"
+    echo "check_failed: $check_failed"
     echo "writer: domain-glossary"
     echo "---"
     echo

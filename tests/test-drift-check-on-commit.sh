@@ -208,6 +208,32 @@ AFTER_HASH="$(shasum "$ALERT" | awk '{print $1}')"
 [[ "$BEFORE_HASH" == "$AFTER_HASH" ]] || { echo "FAIL: malformed JSON cleared firing state"; cat "$ALERT"; exit 1; }
 echo "PASS: malformed JSON summary preserves prior state"
 
+# --- Test 4d: corrupt prior alert preserves since (no reset) ---
+mkdir -p "$CEO_VAULT/CEO/alerts"
+cat >"$ALERT" <<'CORRUPT'
+this file has no frontmatter or status line at all
+just garbage text
+CORRUPT
+# Restore the clean-glossary fixture so the new run produces status=clear.
+cat >"$VAULT/Test/glossary.md" <<'MD'
+### Relocated thing
+
+**Citation:** `relocated_thing` in `repo:src/new_home/lib.py`
+MD
+# Recreate the stub since the previous tests may have left the timeout stub.
+cat >"$STUB_DIR/drift-check-all.sh" <<'STUB'
+#!/usr/bin/env bash
+echo '{"summary":true,"resolved":1,"relocated":0,"unresolved":0,"glossaries_missing":0,"check_failed":0}'
+STUB
+chmod +x "$STUB_DIR/drift-check-all.sh"
+DRIFT_CHECK_FOREGROUND=1 \
+  CEO_VAULT="$CEO_VAULT" \
+  DOMAIN_GLOSSARY_CONFIG="$CONFIG" \
+  "$HOOK_COPY" 2>"$TMP/stderr4d.log"
+grep -q "lacks parseable status" "$TMP/stderr4d.log" || { echo "FAIL: no corruption stderr"; cat "$TMP/stderr4d.log"; exit 1; }
+grep -q "^status: clear" "$ALERT" || { echo "FAIL: alert not rewritten"; cat "$ALERT"; exit 1; }
+echo "PASS: corrupt prior alert surfaced via stderr; new state written"
+
 # --- Test 4c: lock prevents concurrent state-file clobber ---
 # Pre-fix, two near-simultaneous foreground runs read the same prior state and
 # the second clobbered the first. With the lock, the second run sees the dir
