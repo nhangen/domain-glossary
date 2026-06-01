@@ -234,6 +234,50 @@ grep -q "lacks parseable status" "$TMP/stderr4d.log" || { echo "FAIL: no corrupt
 grep -q "^status: clear" "$ALERT" || { echo "FAIL: alert not rewritten"; cat "$ALERT"; exit 1; }
 echo "PASS: corrupt prior alert surfaced via stderr; new state written"
 
+# --- Test 4e: missing python3 preserves state (alert untouched, stderr only) ---
+# Seed firing state; run hook with PATH that excludes python3.
+mkdir -p "$CEO_VAULT/CEO/alerts"
+cat >"$ALERT" <<'PRIOR'
+---
+status: firing
+since: 2026-01-01T00:00:00Z
+last_check: 2026-01-01T00:00:00Z
+resolved: 0
+relocated: 1
+unresolved: 0
+glossaries_missing: 0
+check_failed: 0
+writer: domain-glossary
+---
+
+# Glossary Drift
+
+1 citation(s) need review.
+PRIOR
+BEFORE_HASH="$(shasum "$ALERT" | awk '{print $1}')"
+NO_PY3_PATH="$TMP/no-python"
+mkdir -p "$NO_PY3_PATH"
+# Build a PATH containing essentials but no python3.
+SAFE_PATH=""
+for d in /usr/bin /bin /usr/sbin /sbin; do
+  if [[ ! -x "$d/python3" ]]; then
+    SAFE_PATH="${SAFE_PATH:+$SAFE_PATH:}$d"
+  fi
+done
+if [[ -z "$SAFE_PATH" ]] || PATH="$NO_PY3_PATH:$SAFE_PATH" command -v python3 >/dev/null 2>&1; then
+  echo "SKIP: cannot build a PATH without python3 on this host"
+else
+  PATH="$NO_PY3_PATH:$SAFE_PATH" \
+  DRIFT_CHECK_FOREGROUND=1 \
+    CEO_VAULT="$CEO_VAULT" \
+    DOMAIN_GLOSSARY_CONFIG="$CONFIG" \
+    "$HOOK_COPY" 2>"$TMP/stderr4e.log"
+  grep -q "python3 unavailable" "$TMP/stderr4e.log" || { echo "FAIL: no python3-missing stderr"; cat "$TMP/stderr4e.log"; exit 1; }
+  AFTER_HASH="$(shasum "$ALERT" | awk '{print $1}')"
+  [[ "$BEFORE_HASH" == "$AFTER_HASH" ]] || { echo "FAIL: alert mutated with python3 missing"; exit 1; }
+  echo "PASS: missing python3 preserves firing state"
+fi
+
 # --- Test 4c: lock prevents concurrent state-file clobber ---
 # Pre-fix, two near-simultaneous foreground runs read the same prior state and
 # the second clobbered the first. With the lock, the second run sees the dir

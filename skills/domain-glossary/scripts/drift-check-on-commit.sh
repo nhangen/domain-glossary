@@ -52,6 +52,16 @@ elif command -v gtimeout >/dev/null 2>&1; then
 fi
 
 run_check() {
+  # python3 is used twice (summary parse + drift-line formatting). Without it,
+  # the first call's output would be empty (caught by the [[ -z $counts ]]
+  # guard, state preserved) but the second call would silently produce an
+  # empty bullet list while still writing status=firing — losing actionable
+  # detail with no signal. Bail at the entry point to preserve state intact.
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "glossary-drift: python3 unavailable; skipping drift check" >&2
+    return 0
+  fi
+
   local stderr_file stdout_file rc lockdir
   stderr_file="$(mktemp -t glossary-drift.err.XXXXXX)"
   stdout_file="$(mktemp -t glossary-drift.out.XXXXXX)"
