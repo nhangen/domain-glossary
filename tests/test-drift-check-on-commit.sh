@@ -116,6 +116,60 @@ AFTER_HASH="$(shasum "$ALERT" | awk '{print $1}')"
 [[ "$BEFORE_HASH" == "$AFTER_HASH" ]] || { echo "FAIL: alert file mutated on timeout"; exit 1; }
 echo "PASS: timeout enforced; state file preserved"
 
+# --- Test 4a: timeout via watchdog fallback (no `timeout`/`gtimeout` on PATH) ---
+# The previous test takes the TIMEOUT_BIN branch when coreutils is installed.
+# This one forces the fallback path (pkill -P + kill -9 wrapper) by scrubbing
+# PATH down to dirs that don't contain timeout/gtimeout.
+SCRUB_PATH=""
+for d in /usr/bin /bin /usr/sbin /sbin; do
+  if [[ ! -x "$d/timeout" && ! -x "$d/gtimeout" ]]; then
+    SCRUB_PATH="${SCRUB_PATH:+$SCRUB_PATH:}$d"
+  fi
+done
+if [[ -z "$SCRUB_PATH" ]] || command -v timeout >/dev/null 2>&1 && PATH="$SCRUB_PATH" command -v timeout >/dev/null 2>&1; then
+  echo "SKIP: cannot build a PATH without timeout/gtimeout on this host"
+else
+  rm -f "$ALERT"
+  # Re-seed prior state so we can detect a regression that clears it.
+  mkdir -p "$CEO_VAULT/CEO/alerts"
+  cat >"$ALERT" <<'PRIOR'
+---
+status: firing
+since: 2026-01-01T00:00:00Z
+last_check: 2026-01-01T00:00:00Z
+resolved: 0
+relocated: 1
+unresolved: 0
+glossaries_missing: 0
+writer: domain-glossary
+---
+
+# Glossary Drift
+
+1 citation(s) need review.
+PRIOR
+  BEFORE_HASH="$(shasum "$ALERT" | awk '{print $1}')"
+  cat >"$STUB_DIR/drift-check-all.sh" <<'STUB'
+#!/usr/bin/env bash
+sleep 60
+STUB
+  chmod +x "$STUB_DIR/drift-check-all.sh"
+  START=$(date +%s)
+  PATH="$SCRUB_PATH" \
+  DRIFT_CHECK_FOREGROUND=1 \
+    DRIFT_CHECK_TIMEOUT_SECS=2 \
+    CEO_VAULT="$CEO_VAULT" \
+    DOMAIN_GLOSSARY_CONFIG="$CONFIG" \
+    "$HOOK_COPY" 2>"$TMP/stderr4a.log"
+  END=$(date +%s)
+  ELAPSED=$((END - START))
+  [[ "$ELAPSED" -lt 10 ]] || { echo "FAIL: watchdog fallback didn't enforce timeout (${ELAPSED}s)"; exit 1; }
+  grep -q "timed out" "$TMP/stderr4a.log" || { echo "FAIL: no timeout stderr from watchdog fallback"; cat "$TMP/stderr4a.log"; exit 1; }
+  AFTER_HASH="$(shasum "$ALERT" | awk '{print $1}')"
+  [[ "$BEFORE_HASH" == "$AFTER_HASH" ]] || { echo "FAIL: watchdog fallback mutated state on timeout"; exit 1; }
+  echo "PASS: watchdog fallback enforces timeout; state preserved"
+fi
+
 # --- Test 4b: malformed JSON summary preserves state (schema-strict parser) ---
 cat >"$STUB_DIR/drift-check-all.sh" <<'STUB'
 #!/usr/bin/env bash
