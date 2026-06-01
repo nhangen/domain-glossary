@@ -39,6 +39,8 @@ Because `token-scope` was not available in the trial shell, this repository does
 | `/domain-glossary` | Identify the current domain and list available subcommands. |
 | `/domain-glossary seed <domain>` | Run the four seed scripts and merge candidates for review. |
 | `/domain-glossary drift-check <glossary.md>` | Resolve every citation in the glossary and report drift. |
+| `drift-check-all.sh [--config <path>] [--json]` | Walk every domain in `domain-glossary.local.md` and aggregate counts. Exit status = drift count. |
+| `drift-check-on-commit.sh` | Async post-commit hook. Returns in ~10–70 ms, runs drift-check-all in a detached subshell under a 30 s hard timeout, and overwrites `$CEO_VAULT/CEO/alerts/glossary-drift.md` as a state file. |
 
 ## Scripts
 
@@ -47,6 +49,8 @@ All scripts live under `skills/domain-glossary/scripts/` and can be run directly
 | Script | Purpose |
 |---|---|
 | `drift-check.sh [--repo name=path] [--json] <glossary.md>` | Resolve citations, emit `RESOLVED` / `RELOCATED` / `UNRESOLVED`. |
+| `drift-check-all.sh [--config <path>] [--json]` | Drift-check every domain in `domain-glossary.local.md`, summary at the end. Repo aliases are derived from the basename of each registered repo path. |
+| `drift-check-on-commit.sh` | Async post-commit wrapper. See `docs/playbooks/glossary-drift.md`. |
 | `seed-from-claude-mem.sh --project <p> --query <q>` | Candidate terms from claude-mem SQLite (`~/.claude-mem/claude-mem.db`). |
 | `seed-from-commits.sh --repo <path> [--since <date>]` | Candidate terms by phrase frequency in git log. |
 | `seed-from-gitnexus.sh --repo <path> --repo-name <alias>` | Candidate terms from symbol definitions (GitNexus when present, grep fallback). |
@@ -75,6 +79,24 @@ skills/domain-glossary/scripts/drift-check.sh \
   --repo "mtf-builder=/path/to/mtf-builder" \
   /path/to/glossary.md
 ```
+
+Drift-check every configured domain (uses `domain-glossary.local.md`):
+
+```bash
+skills/domain-glossary/scripts/drift-check-all.sh
+# or, for machine-readable output:
+skills/domain-glossary/scripts/drift-check-all.sh --json
+```
+
+Wire the async post-commit hook (state file under `$CEO_VAULT/CEO/alerts/`):
+
+```bash
+# in your commit-capture flow, after a successful commit is detected:
+~/ML-AI/claude/domain-glossary/skills/domain-glossary/scripts/drift-check-on-commit.sh || true
+```
+
+The hook detaches and returns in ~10–70 ms; the work itself runs in the
+background under a hard 30 s timeout. See `docs/playbooks/glossary-drift.md`.
 
 Seed candidates for a domain glossary:
 
