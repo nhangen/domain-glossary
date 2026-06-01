@@ -52,11 +52,40 @@ elif command -v gtimeout >/dev/null 2>&1; then
 fi
 
 run_check() {
-  local stderr_file stdout_file rc
+  local stderr_file stdout_file rc lockdir
   stderr_file="$(mktemp -t glossary-drift.err.XXXXXX)"
   stdout_file="$(mktemp -t glossary-drift.out.XXXXXX)"
+
+  # Serialize concurrent runs (N commits in a rebase, parallel hooks). Without
+  # this, two children read the same prior state and the second can clobber
+  # the first's firing→since timestamp, or overwrite firing with stale clear.
+  # mkdir is portable atomic-create across macOS/Linux without depending on
+  # flock(1) (not in macOS base).
+  lockdir="$ALERT_FILE.lock.d"
+  mkdir -p "$(dirname "$lockdir")"
+  if ! mkdir "$lockdir" 2>/dev/null; then
+    # Stale-lock detection: if the holder's PID is gone, reclaim.
+    local holder_pid=""
+    if [[ -f "$lockdir/pid" ]]; then
+      holder_pid="$(cat "$lockdir/pid" 2>/dev/null)"
+    fi
+    if [[ -n "$holder_pid" ]] && ! kill -0 "$holder_pid" 2>/dev/null; then
+      rm -rf "$lockdir"
+      if ! mkdir "$lockdir" 2>/dev/null; then
+        echo "glossary-drift: lock contention after reclaim attempt; skipping" >&2
+        rm -f "$stderr_file" "$stdout_file"
+        return 0
+      fi
+    else
+      # Active holder; skip this run. The held run will write fresh state.
+      rm -f "$stderr_file" "$stdout_file"
+      return 0
+    fi
+  fi
+  echo $$ >"$lockdir/pid"
+
   # shellcheck disable=SC2064
-  trap "rm -f '$stderr_file' '$stdout_file'" EXIT
+  trap "rm -rf '$lockdir'; rm -f '$stderr_file' '$stdout_file'" EXIT
 
   if [[ -n "$TIMEOUT_BIN" ]]; then
     "$TIMEOUT_BIN" --signal=KILL "${TIMEOUT_SECS}" \

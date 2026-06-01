@@ -154,6 +154,39 @@ AFTER_HASH="$(shasum "$ALERT" | awk '{print $1}')"
 [[ "$BEFORE_HASH" == "$AFTER_HASH" ]] || { echo "FAIL: malformed JSON cleared firing state"; cat "$ALERT"; exit 1; }
 echo "PASS: malformed JSON summary preserves prior state"
 
+# --- Test 4c: lock prevents concurrent state-file clobber ---
+# Pre-fix, two near-simultaneous foreground runs read the same prior state and
+# the second clobbered the first. With the lock, the second run sees the dir
+# held and skips, leaving the first run's state untouched.
+cat >"$STUB_DIR/drift-check-all.sh" <<'STUB'
+#!/usr/bin/env bash
+# Stub that takes 1 second so two parallel runs overlap.
+sleep 1
+echo '{"summary":true,"resolved":0,"relocated":1,"unresolved":0,"glossaries_missing":0}'
+STUB
+chmod +x "$STUB_DIR/drift-check-all.sh"
+rm -f "$ALERT"
+# Run A in background (longer-lived), Run B foreground while A holds the lock.
+DRIFT_CHECK_FOREGROUND=1 \
+  DRIFT_CHECK_TIMEOUT_SECS=10 \
+  CEO_VAULT="$CEO_VAULT" \
+  DOMAIN_GLOSSARY_CONFIG="$CONFIG" \
+  "$HOOK_COPY" &
+A_PID=$!
+sleep 0.2
+SKIP_STDERR="$TMP/skip-stderr.log"
+DRIFT_CHECK_FOREGROUND=1 \
+  DRIFT_CHECK_TIMEOUT_SECS=10 \
+  CEO_VAULT="$CEO_VAULT" \
+  DOMAIN_GLOSSARY_CONFIG="$CONFIG" \
+  "$HOOK_COPY" 2>"$SKIP_STDERR"
+B_RC=$?
+wait "$A_PID"
+[[ "$B_RC" -eq 0 ]] || { echo "FAIL: lock-skipped run should still return 0"; exit 1; }
+[[ -f "$ALERT" ]] || { echo "FAIL: A should have written the alert"; exit 1; }
+grep -q "^relocated: 1" "$ALERT" || { echo "FAIL: A's content missing"; cat "$ALERT"; exit 1; }
+echo "PASS: concurrent run skipped while lock held"
+
 # --- Test 5: detached mode returns quickly (python-based timer for portability) ---
 ELAPSED_MS=$(python3 -c '
 import os, sys, time, subprocess
