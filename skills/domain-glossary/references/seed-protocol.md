@@ -4,7 +4,6 @@ Candidate terms come from existing artifacts, not from a blank interview.
 
 Sources:
 
-- claude-mem observations for recurring domain phrases.
 - Git commit messages for repeated nouns and noun phrases.
 - GitNexus-indexed repos when available, with local symbol definitions as the
   scriptable fallback.
@@ -25,7 +24,6 @@ candidate<TAB>count<TAB>source<TAB>evidence
 
 The evidence column is source-specific:
 
-- `claude-mem`: comma-separated observation IDs.
 - `commits`: first matching commit subject.
 - `gitnexus-fallback`: a proposed symbol citation.
 - `docs`: a `<repo>:<relative/path>` pointer to the doc file the candidate came
