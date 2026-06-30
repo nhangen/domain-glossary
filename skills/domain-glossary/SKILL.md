@@ -1,7 +1,7 @@
 ---
 name: domain-glossary
-description: Source-grounded project glossary lookup and curation. **Use when the user asks "what is X?", "what does <ACRONYM> mean?", "define X", "explain <term>", or references any project-specific acronym, code-symbol, or domain noun in a registered repo — do not guess at expansions.** Auto-resolves the right glossary for the current cwd via a resolver script. Also handles `seed` (build candidates from claude-mem / commits / GitNexus / docs) and `drift-check` (verify every citation still resolves).
-version: 0.2.0
+description: Source-grounded project glossary lookup and curation. **Use when the user asks "what is X?", "what does <ACRONYM> mean?", "define X", "explain <term>", or references any project-specific acronym, code-symbol, or domain noun in a registered repo — do not guess at expansions.** Auto-resolves the right glossary for the current cwd via a resolver script. Also handles `seed` (build candidates from commits / GitNexus / docs) and `drift-check` (verify every citation still resolves).
+version: 0.2.1
 author: nhangen
 ---
 
@@ -42,10 +42,9 @@ This is the default invocation. Slash-commands `seed` and `drift-check` (below) 
 
 ## Operation 2 — Seed new candidate terms
 
-`/domain-glossary seed <domain>` — discover candidate terms for a domain by running all four seeders against its registered repos and presenting a ranked, deduped candidate list for user confirmation before writing.
+`/domain-glossary seed <domain>` — discover candidate terms for a domain by running the three seeders against its registered repos and presenting a ranked, deduped candidate list for user confirmation before writing.
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/seed-from-claude-mem.sh --project <project> --query <domain>
 ${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/seed-from-commits.sh --repo <repo>
 ${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/seed-from-gitnexus.sh --repo <repo> --repo-name <name>
 ${CLAUDE_PLUGIN_ROOT}/skills/domain-glossary/scripts/seed-from-docs.sh --repo <repo> --repo-name <name>

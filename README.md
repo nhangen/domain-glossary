@@ -11,7 +11,7 @@ This plugin keeps glossary entries in Obsidian (per-domain, not per-repo), requi
 ## How it works
 
 1. **Look up on demand.** When the agent encounters an unfamiliar acronym or project-specific term in a registered repo, it auto-invokes the skill, resolves the cwd to a domain via `domain-glossary.local.md`, reads that domain's glossary file, and answers grounded — no manual `@-includes`, no CLAUDE.md edits.
-2. **Seed** candidate terms from four sources: claude-mem observations, git commit message corpora, local symbol definitions (GitNexus CLI when available, grep fallback otherwise), and in-repo documentation (READMEs, `docs/**`, Python docstrings).
+2. **Seed** candidate terms from three sources: git commit message corpora, local symbol definitions (GitNexus CLI when available, grep fallback otherwise), and in-repo documentation (READMEs, `docs/**`, Python docstrings).
 3. **Confirm** each candidate with the user before writing — the agent never writes uncited entries.
 4. **Store** accepted entries in an Obsidian domain glossary (`<vault>/<Domain>/glossary.md`).
 5. **Drift-check** on demand: walk every citation, resolve it against the cited repo, report status.
@@ -37,7 +37,7 @@ Because `token-scope` was not available in the trial shell, this repository does
 |---|---|
 | *(no command — auto-invoke)* | When the agent meets a term it can't ground, it invokes the skill, resolves the active repo's domain, and reads the matching glossary before answering. |
 | `/domain-glossary` | Identify the current domain and list available subcommands. |
-| `/domain-glossary seed <domain>` | Run the four seed scripts and merge candidates for review. |
+| `/domain-glossary seed <domain>` | Run the three seed scripts and merge candidates for review. |
 | `/domain-glossary drift-check <glossary.md>` | Resolve every citation in the glossary and report drift. |
 | `drift-check-all.sh [--config <path>] [--json]` | Walk every domain in `domain-glossary.local.md` and aggregate counts. Exit status = drift count. |
 | `drift-check-on-commit.sh` | Async post-commit hook. Returns in ~10–70 ms, runs drift-check-all in a detached subshell under a 30 s hard timeout, and overwrites `$CEO_VAULT/CEO/alerts/glossary-drift.md` as a state file. |
@@ -51,7 +51,6 @@ All scripts live under `skills/domain-glossary/scripts/` and can be run directly
 | `drift-check.sh [--repo name=path] [--json] <glossary.md>` | Resolve citations, emit `RESOLVED` / `RELOCATED` / `UNRESOLVED`. |
 | `drift-check-all.sh [--config <path>] [--json]` | Drift-check every domain in `domain-glossary.local.md`, summary at the end. Repo aliases are derived from the basename of each registered repo path. |
 | `drift-check-on-commit.sh` | Async post-commit wrapper. See `docs/playbooks/glossary-drift.md`. |
-| `seed-from-claude-mem.sh --project <p> --query <q>` | Candidate terms from claude-mem SQLite (`~/.claude-mem/claude-mem.db`). |
 | `seed-from-commits.sh --repo <path> [--since <date>]` | Candidate terms by phrase frequency in git log. |
 | `seed-from-gitnexus.sh --repo <path> --repo-name <alias>` | Candidate terms from symbol definitions (GitNexus when present, grep fallback). |
 | `seed-from-docs.sh --repo <path> --repo-name <alias>` | Candidate terms from READMEs, `docs/**`, module READMEs, and Python module/class docstrings. |
@@ -101,7 +100,6 @@ background under a hard 30 s timeout. See `docs/playbooks/glossary-drift.md`.
 Seed candidates for a domain glossary:
 
 ```bash
-skills/domain-glossary/scripts/seed-from-claude-mem.sh --project mtf-builder --query Altamira
 skills/domain-glossary/scripts/seed-from-commits.sh    --repo /path/to/mtf-builder
 skills/domain-glossary/scripts/seed-from-gitnexus.sh   --repo /path/to/mtf-builder --repo-name mtf-builder
 skills/domain-glossary/scripts/seed-from-docs.sh       --repo /path/to/mtf-builder --repo-name mtf-builder
@@ -117,7 +115,7 @@ Personal plugin (source-tree development model):
 # Source lives in ~/ML-AI/claude/domain-glossary
 # Symlink into the Claude Code plugin cache to use it live:
 ln -s ~/ML-AI/claude/domain-glossary \
-      ~/.claude/plugins/cache/nhangen/domain-glossary/0.2.0
+      ~/.claude/plugins/cache/nhangen/domain-glossary/0.2.1
 ```
 
 Then restart Claude Code. The `/domain-glossary` command and skill become available.
@@ -155,7 +153,6 @@ domains:
 | Env var | Default | Purpose |
 |---|---|---|
 | `OBSIDIAN_VAULT_PATH` | `~/Documents/Obsidian` | Vault root for citation resolution and `[[wikilink]]` lookups. |
-| `CLAUDE_MEM_DB` | `~/.claude-mem/claude-mem.db` | claude-mem SQLite database for seeding. |
 
 ## Development
 

@@ -41,35 +41,6 @@ WORKTREE_OUTPUT="$(
 )"
 grep -q "smooth phase" <<<"$WORKTREE_OUTPUT"
 
-DB="$TMP/claude-mem.db"
-sqlite3 "$DB" <<'SQL'
-CREATE TABLE observations (
-  id INTEGER PRIMARY KEY,
-  project TEXT NOT NULL,
-  title TEXT,
-  subtitle TEXT,
-  narrative TEXT,
-  text TEXT,
-  concepts TEXT,
-  created_at_epoch INTEGER NOT NULL
-);
-INSERT INTO observations VALUES
-  (1, 'mtf-builder', 'Smooth phase boundary validation', '', 'smooth phase boundary validation protects continuity', '', 'smooth phase boundary', 3),
-  (2, 'mtf-builder', 'Smooth phase boundary fix', '', 'smooth phase boundary drift check', '', 'smooth phase boundary', 2),
-  (3, 'mtf-builder', 'Smooth phase boundary report', '', 'smooth phase boundary metrics', '', 'smooth phase boundary', 1);
-SQL
-
-MEM_OUTPUT="$(
-  "$ROOT/skills/domain-glossary/scripts/seed-from-claude-mem.sh" \
-    --db "$DB" \
-    --project mtf-builder \
-    --query smooth \
-    --min-count 3 \
-    --limit 20
-)"
-grep -q "smooth phase" <<<"$MEM_OUTPUT"
-grep -q "1,2,3\\|3,2,1" <<<"$MEM_OUTPUT"
-
 SYMBOL_OUTPUT="$(
   "$ROOT/skills/domain-glossary/scripts/seed-from-gitnexus.sh" \
     --repo "$REPO" \
