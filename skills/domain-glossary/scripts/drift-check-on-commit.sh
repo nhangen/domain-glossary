@@ -34,7 +34,16 @@ CEO_VAULT="${CEO_VAULT:-$HOME/Documents/Obsidian}"
 ALERT_FILE="$CEO_VAULT/CEO/alerts/glossary-drift.md"
 TIMEOUT_SECS="${DRIFT_CHECK_TIMEOUT_SECS:-30}"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
-CONFIG="${DOMAIN_GLOSSARY_CONFIG:-$PLUGIN_ROOT/domain-glossary.local.md}"
+# Precedence: explicit env override, then plugin-root, then version-independent
+# XDG location (survives plugin updates that recreate the cache dir).
+XDG_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/domain-glossary/domain-glossary.local.md"
+if [[ -n "${DOMAIN_GLOSSARY_CONFIG:-}" ]]; then
+  CONFIG="$DOMAIN_GLOSSARY_CONFIG"
+elif [[ -f "$PLUGIN_ROOT/domain-glossary.local.md" ]]; then
+  CONFIG="$PLUGIN_ROOT/domain-glossary.local.md"
+else
+  CONFIG="$XDG_CONFIG"
+fi
 
 # Skip entirely if the user hasn't configured a glossary.
 if [[ ! -f "$CONFIG" ]]; then

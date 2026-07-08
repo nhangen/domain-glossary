@@ -22,7 +22,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Plugin root is two levels up from skills/domain-glossary/scripts/.
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
-CONFIG="$PLUGIN_ROOT/domain-glossary.local.md"
+# Config resolution: prefer the plugin-root copy (legacy/explicit setups), but
+# fall back to a version-independent XDG location. A plugin update recreates the
+# cache dir and would otherwise silently wipe the plugin-root config.
+XDG_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/domain-glossary/domain-glossary.local.md"
+if [[ -f "$PLUGIN_ROOT/domain-glossary.local.md" ]]; then
+  CONFIG="$PLUGIN_ROOT/domain-glossary.local.md"
+else
+  CONFIG="$XDG_CONFIG"
+fi
 CWD=""
 
 while [[ $# -gt 0 ]]; do

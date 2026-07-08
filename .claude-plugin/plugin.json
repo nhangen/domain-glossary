@@ -1,6 +1,6 @@
 {
   "name": "domain-glossary",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Source-grounded project glossary: auto-invokes on unfamiliar terms in registered repos, plus build (seed) and maintain (drift-check) operations.",
   "author": {
     "name": "nhangen"

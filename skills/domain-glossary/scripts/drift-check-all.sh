@@ -20,7 +20,14 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
-CONFIG="$PLUGIN_ROOT/domain-glossary.local.md"
+# Prefer plugin-root config, fall back to a version-independent XDG location so
+# a plugin update (which recreates the cache dir) can't silently wipe it.
+XDG_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/domain-glossary/domain-glossary.local.md"
+if [[ -f "$PLUGIN_ROOT/domain-glossary.local.md" ]]; then
+  CONFIG="$PLUGIN_ROOT/domain-glossary.local.md"
+else
+  CONFIG="$XDG_CONFIG"
+fi
 JSON=0
 
 usage() {

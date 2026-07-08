@@ -1,7 +1,7 @@
 ---
 name: domain-glossary
 description: Source-grounded project glossary lookup and curation. **Use when the user asks "what is X?", "what does <ACRONYM> mean?", "define X", "explain <term>", or references any project-specific acronym, code-symbol, or domain noun in a registered repo — do not guess at expansions.** Auto-resolves the right glossary for the current cwd via a resolver script. Also handles `seed` (build candidates from commits / GitNexus / docs) and `drift-check` (verify every citation still resolves).
-version: 0.2.1
+version: 0.2.2
 author: nhangen
 ---
 
@@ -74,13 +74,24 @@ For automated post-commit invocation, see `drift-check-on-commit.sh` and `docs/p
 
 ## Setup (one-time, per machine)
 
+Config is read from a version-independent location so a plugin update — which
+recreates the cache directory — cannot silently wipe it:
+
 ```bash
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/domain-glossary"
 cp ${CLAUDE_PLUGIN_ROOT}/domain-glossary.local.md.example \
-   ${CLAUDE_PLUGIN_ROOT}/domain-glossary.local.md
-# edit domain-glossary.local.md to register your domains + repo paths
+   "${XDG_CONFIG_HOME:-$HOME/.config}/domain-glossary/domain-glossary.local.md"
+# edit it to register your domains + repo paths
 ```
 
-`*.local.md` is gitignored. No CLAUDE.md edits, no per-repo install — registering a new domain is one entry in this file and works automatically across every Claude Code session afterward.
+Config resolution order: an explicit `--config` / `$DOMAIN_GLOSSARY_CONFIG`
+override, then a legacy `${CLAUDE_PLUGIN_ROOT}/domain-glossary.local.md` if
+present (pre-0.2.2 layout), then the `$XDG_CONFIG_HOME` location above. The
+plugin-root copy still works but does not survive plugin updates — prefer the
+XDG location.
+
+No CLAUDE.md edits, no per-repo install — registering a new domain is one entry
+in this file and works automatically across every Claude Code session afterward.
 
 ## Hard Rules
 
