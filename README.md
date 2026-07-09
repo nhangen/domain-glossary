@@ -115,7 +115,7 @@ Personal plugin (source-tree development model):
 # Source lives in ~/ML-AI/claude/domain-glossary
 # Symlink into the Claude Code plugin cache to use it live:
 ln -s ~/ML-AI/claude/domain-glossary \
-      ~/.claude/plugins/cache/nhangen/domain-glossary/0.2.1
+      ~/.claude/plugins/cache/nhangen/domain-glossary/0.2.2
 ```
 
 Then restart Claude Code. The `/domain-glossary` command and skill become available.
@@ -148,11 +148,20 @@ domains:
 
 `*.local.md` is gitignored. Adding a new domain is one entry in this file; no per-repo install, no CLAUDE.md edits. Worktree siblings (e.g. `mtf-builder-feature-x`) are caught by longest-prefix match.
 
+### Config file resolution
+
+`domain-glossary.local.md` is looked up in this order:
+
+1. `$DOMAIN_GLOSSARY_CONFIG` — explicit override, if set.
+2. `~/ML-AI/claude/domain-glossary/domain-glossary.local.md` — plugin-root copy (legacy/explicit setups).
+3. `${XDG_CONFIG_HOME:-~/.config}/domain-glossary/domain-glossary.local.md` — version-independent fallback that survives a plugin update recreating the cache dir.
+
 ### Env vars
 
 | Env var | Default | Purpose |
 |---|---|---|
 | `OBSIDIAN_VAULT_PATH` | `~/Documents/Obsidian` | Vault root for citation resolution and `[[wikilink]]` lookups. |
+| `DOMAIN_GLOSSARY_CONFIG` | (unset) | Override the resolved `domain-glossary.local.md` path. |
 
 ## Development
 
